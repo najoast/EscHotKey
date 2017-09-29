@@ -2,6 +2,7 @@
 //
 
 #pragma once
+#include "afxwin.h"
 
 
 
@@ -37,6 +38,16 @@ public:
 	virtual BOOL DestroyWindow();
 	afx_msg void OnClose();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
-	afx_msg void OnBnClickedButton1();
 
+private:
+	void AddStartupRun();
+	void DeleteStartupRun();
+public:
+	afx_msg void OnBnClickedAutorun();
+	afx_msg void OnBnClickedRunMin();
+	CButton m_chkAutoRun;
+	CButton m_chkRunMin;
+	afx_msg void OnStnClickedHello();
+	afx_msg void OnBnClickedBtnGithub();
+	afx_msg void OnBnClickedBtnOpenConfig();
 };

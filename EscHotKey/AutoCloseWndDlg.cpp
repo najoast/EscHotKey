@@ -13,6 +13,8 @@
 #define new DEBUG_NEW
 #endif
 
+const char* APP_NAME = "EscHotkey";
+
 CIniFile g_iniConfig;
 // 用于应用程序“关于”菜单项的 CAboutDlg 对话框
 
@@ -60,6 +62,8 @@ CAutoCloseWndDlg::CAutoCloseWndDlg(CWnd* pParent /*=NULL*/)
 void CAutoCloseWndDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialog::DoDataExchange(pDX);
+	DDX_Control(pDX, IDC_AUTORUN, m_chkAutoRun);
+	DDX_Control(pDX, IDC_RUN_MIN, m_chkRunMin);
 }
 
 BEGIN_MESSAGE_MAP(CAutoCloseWndDlg, CDialog)
@@ -69,7 +73,11 @@ BEGIN_MESSAGE_MAP(CAutoCloseWndDlg, CDialog)
 	//}}AFX_MSG_MAP
 	ON_WM_CLOSE()
 	ON_WM_TIMER()
-	ON_BN_CLICKED(IDC_BUTTON1, &CAutoCloseWndDlg::OnBnClickedButton1)
+	ON_BN_CLICKED(IDC_AUTORUN, &CAutoCloseWndDlg::OnBnClickedAutorun)
+	ON_BN_CLICKED(IDC_RUN_MIN, &CAutoCloseWndDlg::OnBnClickedRunMin)
+	ON_STN_CLICKED(IDC_HELLO, &CAutoCloseWndDlg::OnStnClickedHello)
+	ON_BN_CLICKED(IDC_BTN_GITHUB, &CAutoCloseWndDlg::OnBnClickedBtnGithub)
+	ON_BN_CLICKED(IDC_BTN_OPEN_CONFIG, &CAutoCloseWndDlg::OnBnClickedBtnOpenConfig)
 END_MESSAGE_MAP()
 
 enum 
@@ -114,7 +122,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam,LPARAM lParam)
 					if (nPos != std::string::npos)
 					{
 						std::string strFileName = strFullName.substr(nPos+1);
-						int nValue = g_iniConfig.GetValueI("esc", strFileName.c_str());
+						int nValue = g_iniConfig.GetValueI("ESC", strFileName.c_str());
 						switch (nValue)
 						{
 						case ESC_MIN_WINDOW:
@@ -147,6 +155,51 @@ BOOL CAutoCloseWndDlg::OnInitDialog()
 {
 	CDialog::OnInitDialog();
 
+	//得到配置文件的完整路径
+	// 这里有个坑：如果是开机启动，工作目录是C:\Windows\SysWow64,所以会找不到配置文件!
+	// 最初想使用注册表里存的值，后来发现直接取命令行第一个参数就行了，更方便。
+
+	LPSTR pszCmdLine = ::GetCommandLine();
+// 	AfxMessageBox(pszCmdLine);
+	if (strlen(pszCmdLine) < 2)
+		exit(0);
+	pszCmdLine++;//去掉第一个引号
+	char* p = strstr(pszCmdLine, APP_NAME);
+	if (p != NULL)
+		p[0] = '\0';
+
+	CString strConfig;
+	strConfig.Format("%sconfig.ini", pszCmdLine);
+
+// 	if (strstr(pszCmdLine, "regrun") != NULL)
+// 	{
+// 		//找到系统的启动项
+// 		HKEY hKey;
+// 		LPCTSTR lpRun = _T("Software\\Microsoft\\Windows\\CurrentVersion\\Run"); 
+// 		//打开启动项Key 
+// 		long lRet = RegOpenKeyEx(HKEY_LOCAL_MACHINE, lpRun, 0, KEY_WRITE, &hKey);
+// 		if(lRet== ERROR_SUCCESS)
+// 		{
+// 			if (::RegQueryValueEx( hKey, _T(APP_NAME), 0, NULL, (BYTE*)szPath, &dwLen ) == ERROR_SUCCESS)
+// 			{
+// 				AfxMessageBox(szPath);
+// 				char* p = strstr(szPath, APP_NAME);
+// 				if (p != NULL)
+// 					p[0] = '\0';
+// 
+// 				strcat(szPath, "\\config.ini");
+// 			}
+// 
+// 			RegCloseKey(hKey);
+// 		}
+// 	}
+
+	if (!g_iniConfig.ReadFile(strConfig))
+	{
+		AfxMessageBox("Load config.ini failed!");
+		exit(0);
+	}
+
 	// 将“关于...”菜单项添加到系统菜单中。
 
 	// IDM_ABOUTBOX 必须在系统命令范围内。
@@ -178,10 +231,10 @@ BOOL CAutoCloseWndDlg::OnInitDialog()
 	m_nid.uCallbackMessage = WM_SYSTEMTRAY; //图标对应的消息的ID
 	m_nid.hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 	//wcscpy_s(m_nid.szTip,10, L"自动关闭断言");
-	strcpy_s(m_nid.szTip, sizeof(m_nid.szTip), "AutoCloseAssert");
+	strcpy_s(m_nid.szTip, sizeof(m_nid.szTip), APP_NAME);
 	::Shell_NotifyIcon(NIM_ADD,&m_nid);
 
-	SetDlgItemText(IDC_BUTTON1, m_bPause ? "Continue" : "Pause");
+	//SetDlgItemText(IDC_BUTTON1, m_bPause ? "Continue" : "Pause");
 	//ShowWindow(SW_SHOWMINIMIZED);
 
 	// 添加键盘钩子
@@ -189,11 +242,18 @@ BOOL CAutoCloseWndDlg::OnInitDialog()
 	{
 		g_hHook = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc,  AfxGetInstanceHandle(), NULL);
 	}
-	
-	if (!g_iniConfig.ReadFile("config.ini"))
+
+	// 初始化控件状态
+	m_chkAutoRun.SetCheck(g_iniConfig.GetValueI("UserInfo", "AutoRun"));
+	m_chkRunMin.SetCheck(g_iniConfig.GetValueI("UserInfo", "RunMin"));
+
+	if (m_chkRunMin.GetCheck() == BST_CHECKED)
 	{
-		AfxMessageBox("Load config.ini failed!");
-		exit(0);
+		//this->ShowWindow(SW_HIDE);
+		::PostMessage(m_hWnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+		
+		//托盘发送提醒消息
+
 	}
 
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
@@ -302,9 +362,78 @@ void CAutoCloseWndDlg::OnTimer(UINT_PTR nIDEvent)
 	CDialog::OnTimer(nIDEvent);
 }
 
-void CAutoCloseWndDlg::OnBnClickedButton1()
+//开机启动
+void CAutoCloseWndDlg::AddStartupRun()
 {
-	// TODO: 在此添加控件通知处理程序代码
-	m_bPause = !m_bPause;
-	SetDlgItemText(IDC_BUTTON1, m_bPause ? "Continue" : "Pause");
+	HKEY   hKey; 
+	char pFileName[MAX_PATH] = {0}; 
+	//得到程序自身的全路径 
+	DWORD dwRet = GetModuleFileName(NULL, pFileName, MAX_PATH);
+
+	//CString strWriteToReg;
+	//strWriteToReg.Format("\"%s\"", pFileName);//加上双引号，解决路径中有空格的问题。
+
+	//找到系统的启动项 
+	LPCTSTR lpRun = _T("Software\\Microsoft\\Windows\\CurrentVersion\\Run"); 
+	//打开启动项Key 
+	long lRet = RegOpenKeyEx(HKEY_LOCAL_MACHINE, lpRun, 0, KEY_WRITE, &hKey); 
+	if(lRet== ERROR_SUCCESS)
+	{
+		//添加注册
+		lRet = RegSetValueEx(hKey, APP_NAME, 0,REG_SZ,(const BYTE*)(LPCSTR)pFileName, MAX_PATH);
+		RegCloseKey(hKey); 
+	}
+}
+
+//取消开机启动
+void CAutoCloseWndDlg::DeleteStartupRun()
+{
+	HKEY   hKey;
+	char pFileName[MAX_PATH] = {0}; 
+	//得到程序自身的全路径 
+	DWORD dwRet = GetModuleFileNameW(NULL, (LPWCH)pFileName, MAX_PATH); 
+	//找到系统的启动项 
+	LPCTSTR lpRun = _T("Software\\Microsoft\\Windows\\CurrentVersion\\Run"); 
+	//打开启动项Key 
+	long lRet = RegOpenKeyEx(HKEY_LOCAL_MACHINE, lpRun, 0, KEY_WRITE, &hKey); 
+	if(lRet== ERROR_SUCCESS)
+	{
+		//删除注册
+		RegDeleteValue(hKey,_T(APP_NAME));
+		RegCloseKey(hKey);
+	}
+}
+void CAutoCloseWndDlg::OnBnClickedAutorun()
+{
+	int nChecked = m_chkAutoRun.GetCheck();
+	if (BST_CHECKED == nChecked)
+		this->AddStartupRun();
+	else
+		this->DeleteStartupRun();
+
+	g_iniConfig.SetValueI("UserInfo", "AutoRun", nChecked);
+	g_iniConfig.WriteFile();//todo: 保留注释
+}
+
+void CAutoCloseWndDlg::OnBnClickedRunMin()
+{
+	g_iniConfig.SetValueI("UserInfo", "RunMin", m_chkRunMin.GetCheck());
+	g_iniConfig.WriteFile();//todo: 保留注释
+}
+
+void CAutoCloseWndDlg::OnStnClickedHello()
+{
+	
+}
+
+void CAutoCloseWndDlg::OnBnClickedBtnGithub()
+{
+	::ShellExecute(NULL, "Open", "https://github.com/najoast/EscHotkey", NULL, NULL, SW_SHOWNORMAL);
+}
+
+void CAutoCloseWndDlg::OnBnClickedBtnOpenConfig()
+{
+	char szPath[MAX_PATH] = "";
+	if (::GetCurrentDirectory(MAX_PATH, szPath) > 0)
+		::ShellExecute(NULL, "Open", "C:\\windows\\explorer.exe", szPath, NULL, SW_SHOWNORMAL);
 }

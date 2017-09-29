@@ -2,7 +2,7 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="AutoCloseWnd"
+	Name="EscHotkey"
 	ProjectGUID="{8689EFE2-0521-4E6E-BC85-A2C3CBF4D63E}"
 	RootNamespace="AutoCloseWnd"
 	Keyword="MFCProj"
